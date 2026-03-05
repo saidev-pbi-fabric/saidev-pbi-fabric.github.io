@@ -121,6 +121,62 @@ nav {
 }
 .btn-outline:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
 
+/* ─── Numbers Bar ───────────────────────────────────────────── */
+.numbers-bar {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 2rem;
+}
+
+.numbers-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .stat-divider { display: none; }
+  .numbers-inner { justify-content: center; }
+  .stat { min-width: 100px; }
+}
+
 /* ─── Section Base ──────────────────────────────────────────── */
 section {
   padding: 80px 2rem;
