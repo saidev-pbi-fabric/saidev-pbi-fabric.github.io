@@ -6,6 +6,148 @@
   <title>Green Grid — Smart Billing Pipeline | Saidev Bhaskar</title>
   <meta name="description" content="End-to-end PySpark pipeline on Databricks — data ingestion, quarantine, PII hashing, joins, and peak-hour billing logic." />
   <link rel="stylesheet" href="../style.css" />
+
+  <!-- Syntax Highlighting — Atom One Dark theme -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+
+  <style>
+    /* Override hljs background — use our pre background instead */
+    .hljs { background: transparent !important; font-size: 0.85rem; line-height: 1.8; }
+
+    /* Step cards */
+    .step-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin: 2rem 0;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.4rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .step-num {
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      background: rgba(79,142,247,0.1);
+      border: 1px solid rgba(79,142,247,0.25);
+      padding: 3px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .step-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .step-body {
+      padding: 1.4rem;
+    }
+    .step-body p {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 1rem;
+    }
+    .step-body pre { margin: 0.8rem 0 0; }
+
+    /* Insight callout */
+    .insight {
+      display: flex;
+      gap: 0.8rem;
+      background: rgba(79,142,247,0.06);
+      border: 1px solid rgba(79,142,247,0.2);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 0.9rem 1.1rem;
+      margin-top: 1rem;
+    }
+    .insight-label {
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      white-space: nowrap;
+      padding-top: 1px;
+    }
+    .insight p {
+      font-size: 0.85rem !important;
+      color: var(--muted) !important;
+      margin: 0 !important;
+    }
+    .insight strong { color: var(--text); }
+
+    /* Source cards */
+    .source-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin: 1rem 0 1.5rem;
+    }
+    @media (max-width: 620px) { .source-cards { grid-template-columns: 1fr; } }
+    .source-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+    }
+    .source-card .file-name {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--green);
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+    }
+    .source-card p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin: 0;
+    }
+    .source-card .badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+    .badge-csv  { background: rgba(62,207,142,0.1); color: var(--green); border: 1px solid rgba(62,207,142,0.25); }
+    .badge-json { background: rgba(79,142,247,0.1); color: var(--accent); border: 1px solid rgba(79,142,247,0.25); }
+
+    /* Output table cards */
+    .output-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    @media (max-width: 620px) { .output-cards { grid-template-columns: 1fr; } }
+    .output-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem;
+    }
+    .output-card .table-name {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .output-card p { font-size: 0.82rem; color: var(--muted); margin: 0; }
+    .output-quarantine .table-name { color: #f0a04b; }
+    .output-clean      .table-name { color: var(--green); }
+    .output-silver     .table-name { color: var(--accent); }
+  </style>
 </head>
 <body>
 
@@ -16,18 +158,18 @@
       <a href="../index.html#about">About</a>
       <a href="../index.html#skills">Skills</a>
       <a href="../index.html#projects">Projects</a>
-      <a href="https://www.linkedin.com/in/saidev-pbi-fabric" target="_blank">LinkedIn</a>
+      <a href="https://www.linkedin.com/in/saidevbhaskar" target="_blank">LinkedIn</a>
     </div>
   </nav>
 
-  <!-- CASE STUDY HERO -->
+  <!-- HERO -->
   <div class="cs-hero">
     <a href="../index.html" class="cs-back">← Back to Portfolio</a>
-    <div class="hero-tag">Case Study</div>
+    <div class="hero-tag">Case Study · PySpark · Databricks</div>
     <h1>Green Grid — Smart Billing Pipeline</h1>
     <p style="color: var(--muted); font-size: 1rem; margin-top: 0.8rem; max-width: 620px;">
-      End-to-end PySpark pipeline on Databricks — from raw file ingestion to a
-      silver-layer billing table with peak-hour pricing logic.
+      End-to-end data pipeline — raw file ingestion through to a silver-layer billing
+      table with peak-hour pricing, PII hashing, and data quality quarantine.
     </p>
     <div class="cs-meta">
       <div class="cs-meta-item"><strong>Platform</strong> · Databricks (Serverless)</div>
@@ -38,22 +180,19 @@
     </div>
   </div>
 
-  <!-- CASE STUDY BODY -->
+  <!-- BODY -->
   <div class="cs-body">
 
+    <!-- OVERVIEW -->
     <h2>Overview</h2>
     <p>
-      Green Grid is a fictional energy company with three raw data sources: customer
-      PII records, smart meter readings, and pricing plans. The goal was to build a
-      complete ingestion-to-silver pipeline that produces a per-reading bill amount
-      with peak-hour pricing applied.
-    </p>
-    <p>
-      This case study covers every step a data engineer would face on a real project:
-      schema enforcement, data quality quarantine, PII protection, multi-dataset joins,
-      and business logic transformations — all written in PySpark on Databricks.
+      Green Grid is a fictional energy company with three raw data sources. The goal:
+      build a complete ingestion-to-silver pipeline that produces a per-reading bill
+      amount with peak-hour pricing applied — covering every step a data engineer
+      would face on a real project.
     </p>
 
+    <!-- PIPELINE DIAGRAM -->
     <h2>Pipeline Architecture</h2>
     <div class="pipeline-diagram">
       <span class="step">Raw Files (Unity Catalog Volume)</span><br />
@@ -73,24 +212,44 @@
       <span class="table">Silver_SmartBill</span> (Delta managed table)
     </div>
 
+    <!-- DATA SOURCES -->
     <h2>Data Sources</h2>
-    <p>All three files were stored in a managed Unity Catalog volume:</p>
-    <ul>
-      <li><strong>customer_pii.csv</strong> — Customer records including email addresses (PII)</li>
-      <li><strong>meter_readings.json</strong> — Smart meter kWh readings with timestamps (multiLine JSON array)</li>
-      <li><strong>pricing_plans.csv</strong> — Plan names and base price per kWh</li>
-    </ul>
+    <p>All three files stored in a managed Unity Catalog volume at <code>/Volumes/workspace/green_grid_case_study/raw_files/</code></p>
+    <div class="source-cards">
+      <div class="source-card">
+        <div class="badge badge-csv">CSV</div>
+        <div class="file-name">customer_pii.csv</div>
+        <p>Customer records including email addresses. Contains PII — requires hashing before silver layer.</p>
+      </div>
+      <div class="source-card">
+        <div class="badge badge-json">JSON</div>
+        <div class="file-name">meter_readings.json</div>
+        <p>Smart meter kWh readings with timestamps. MultiLine JSON array — requires explicit schema.</p>
+      </div>
+      <div class="source-card">
+        <div class="badge badge-csv">CSV</div>
+        <div class="file-name">pricing_plans.csv</div>
+        <p>Plan names and base price per kWh. Joined to readings via PlanID from customer records.</p>
+      </div>
+    </div>
 
-    <h2>Step 1 — Ingest</h2>
-    <p>
-      CSV files used <code>inferSchema=True</code> for type detection.
-      The JSON meter readings required an explicit <code>StructType</code> schema
-      to enforce <code>TimestampType</code> and <code>DoubleType</code> — JSON partial
-      inference leaves timestamps as strings.
-    </p>
+    <!-- STEP 1 -->
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-num">STEP 01</span>
+        <span class="step-title">Ingest Raw Files</span>
+      </div>
+      <div class="step-body">
+        <p>CSV files used <code>inferSchema=True</code>. The JSON meter readings required an explicit <code>StructType</code> schema — JSON partial inference leaves timestamps as strings, which breaks all time-based functions downstream.</p>
+<pre><code class="language-python">from pyspark.sql.functions import *
+from pyspark.sql.types import *
 
-    <h3>Explicit Schema — meter_readings.json</h3>
-<pre><code>schema_readings = StructType([
+# CSV — inferSchema handles type detection
+df_pii   = spark.read.csv(".../customer_pii.csv",   header=True, inferSchema=True)
+df_plans = spark.read.csv(".../pricing_plans.csv",   header=True, inferSchema=True)
+
+# JSON — explicit schema required to enforce TimestampType
+schema_readings = StructType([
     StructField("kwh",       DoubleType(),    True),
     StructField("meter_id",  StringType(),    True),
     StructField("status",    StringType(),    True),
@@ -102,189 +261,220 @@ df_readings = spark.read.json(
     multiLine=True,
     schema=schema_readings
 )</code></pre>
+        <div class="insight">
+          <span class="insight-label">Why</span>
+          <p><strong>Explicit schema = one file scan, full type control.</strong> inferSchema scans the file twice and still leaves timestamps as strings. For anything going to production, define the schema explicitly.</p>
+        </div>
+      </div>
+    </div>
 
-    <p>
-      <strong>Why explicit schema?</strong> Without it, <code>timestamp</code> comes
-      back as <code>StringType</code> — which breaks any time-based function downstream
-      (<code>hour()</code>, date filtering, window functions). Explicit schema is the
-      production pattern: one pass over the file, full type control, no surprises.
-    </p>
-
-    <h2>Step 2 — Data Quality Quarantine</h2>
-    <p>
-      Before any transformation, bad records were isolated into a quarantine table.
-      This is a standard medallion architecture pattern — never transform dirty data,
-      always preserve it for investigation.
-    </p>
-
-<pre><code># Quarantine: readings outside valid range
+    <!-- STEP 2 -->
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-num">STEP 02</span>
+        <span class="step-title">Quarantine Bad Records</span>
+      </div>
+      <div class="step-body">
+        <p>Before any transformation, invalid readings are isolated into a separate table. Standard medallion pattern — never transform dirty data, always preserve it.</p>
+<pre><code class="language-python"># Isolate bad records: negative or unrealistically high kWh
 df_quarantine = df_readings.filter(
-    (df_readings.kwh &lt; 0) | (df_readings.kwh &gt;= 100)
+    (df_readings.kwh < 0) | (df_readings.kwh >= 100)
 )
 df_quarantine.write.mode("overwrite").saveAsTable(
     "workspace.green_grid_case_study.Quarantine_Readings"
 )
 
-# Validate the write
+# Validate: confirm row count matches what was written
 df_test = spark.read.table("workspace.green_grid_case_study.Quarantine_Readings")
-df_quarantine.count() == df_test.count()</code></pre>
+df_quarantine.count() == df_test.count()  # must return True</code></pre>
+        <div class="insight">
+          <span class="insight-label">Why</span>
+          <p>The count assertion is a <strong>lightweight write validation</strong> — confirms no rows were silently dropped or duplicated. Visual spot-check via display() alone is not enough.</p>
+        </div>
+      </div>
+    </div>
 
-    <p>
-      The count assertion confirms no rows were dropped or duplicated during the write —
-      a lightweight but important validation step before moving downstream.
-    </p>
-
-    <h2>Step 3 — Clean Readings</h2>
-    <p>
-      The inverse of the quarantine filter — only readings with valid kWh values
-      pass through to the clean table.
-    </p>
-
-<pre><code>df_clean = df_readings.filter(
+    <!-- STEP 3 -->
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-num">STEP 03</span>
+        <span class="step-title">Filter Clean Readings</span>
+      </div>
+      <div class="step-body">
+        <p>Inverse of the quarantine filter. Nulls handled explicitly — they pass through range checks silently if not caught.</p>
+<pre><code class="language-python">df_clean = df_readings.filter(
     df_readings.kwh.isNotNull() &
-    (df_readings.kwh &gt;= 0) &
-    (df_readings.kwh &lt; 100)
+    (df_readings.kwh >= 0) &
+    (df_readings.kwh < 100)
 )
 df_clean.write.mode("overwrite").saveAsTable(
     "workspace.green_grid_case_study.clean_readings"
 )</code></pre>
+        <div class="insight">
+          <span class="insight-label">Why</span>
+          <p><strong>NULL ≠ False in Spark.</strong> <code>NULL &lt; 0</code> evaluates to NULL, not True — so nulls pass through a range filter into the clean dataset unless you explicitly check <code>isNotNull()</code>.</p>
+        </div>
+      </div>
+    </div>
 
-    <h2>Step 4 — Join Three Datasets</h2>
-    <p>
-      Two left joins chained in a single statement — clean readings to PII on
-      <code>meter_id</code>, then PII to pricing plans on <code>PlanID</code>.
-      Ambiguous columns dropped explicitly to avoid duplicates downstream.
-    </p>
+    <!-- STEP 4 -->
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-num">STEP 04</span>
+        <span class="step-title">Join Three Datasets</span>
+      </div>
+      <div class="step-body">
+        <p>Two left joins chained in one statement. Ambiguous column names dropped using DataFrame references — not string names, which would fail silently.</p>
+<pre><code class="language-python">df_joined = (
+    df_clean
+    .join(df_pii,   df_clean.meter_id == df_pii.MeterID,  "left")
+    .join(df_plans, df_pii.PlanID == df_plans.PlanID,     "left")
+    .drop(df_clean.meter_id)   # drop ambiguous column by DataFrame ref
+    .drop(df_pii.PlanID)       # drop ambiguous column by DataFrame ref
+)</code></pre>
+        <div class="insight">
+          <span class="insight-label">Why</span>
+          <p>After joining tables that share column names, dropping by <strong>DataFrame reference</strong> (<code>df_clean.meter_id</code>) is unambiguous. Dropping by string name (<code>"meter_id"</code>) when duplicates exist throws an error.</p>
+        </div>
+      </div>
+    </div>
 
-<pre><code>df_joined = df_clean \
-    .join(df_pii,   df_clean.meter_id == df_pii.MeterID,    "left") \
-    .join(df_plans, df_pii.PlanID     == df_plans.PlanID,   "left") \
-    .drop(df_clean.meter_id) \
-    .drop(df_pii.PlanID)</code></pre>
+    <!-- STEP 5 -->
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-num">STEP 05</span>
+        <span class="step-title">Hash PII</span>
+      </div>
+      <div class="step-body">
+        <p>Customer email is PII and cannot appear in a silver table that downstream consumers access. SHA-256 replaces the raw value while preserving join-back capability to the source system.</p>
+<pre><code class="language-python">df_hashed = (
+    df_joined
+    .withColumn("CustomerHashed", sha2(df_joined.CustomerEmail, 256))
+    .drop(df_joined.CustomerEmail)   # raw email removed — never reaches silver
+)</code></pre>
+        <div class="insight">
+          <span class="insight-label">Why</span>
+          <p><strong>SHA-256 is one-way</strong> — the original email cannot be recovered from the hash. But the same email always produces the same hash, so you can still join back to source systems if needed.</p>
+        </div>
+      </div>
+    </div>
 
-    <h2>Step 5 — Hash PII</h2>
-    <p>
-      Customer email addresses are PII — they cannot appear in a silver table
-      that downstream consumers may access. SHA-256 hashing preserves the ability
-      to join back to the source system while removing the raw identifier.
-    </p>
-
-<pre><code>df_hashed = df_joined \
-    .withColumn("CustomerHashed", sha2(df_joined.CustomerEmail, 256)) \
-    .drop(df_joined.CustomerEmail)</code></pre>
-
-    <h2>Step 6 — Peak Pricing & Bill Calculation</h2>
-    <p>
-      Business rule: readings between 18:00 and 21:00 (peak hours) are charged
-      at 2× the base rate. The <code>hour()</code> function extracts the hour
-      from the timestamp column, and <code>when().otherwise()</code> applies
-      the conditional rate — equivalent to SQL <code>CASE WHEN</code>.
-    </p>
-
-<pre><code># Extract hour from timestamp
+    <!-- STEP 6 -->
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-num">STEP 06</span>
+        <span class="step-title">Apply Peak Pricing & Calculate Bill</span>
+      </div>
+      <div class="step-body">
+        <p>Business rule: readings between 18:00–21:00 are charged at 2× the base rate. <code>hour()</code> extracts the hour component. <code>when().otherwise()</code> is PySpark's equivalent of SQL <code>CASE WHEN</code>.</p>
+<pre><code class="language-python"># Extract hour from TimestampType column
 df_final1 = df_hashed.withColumn("Hour", hour(df_hashed.timestamp))
 
-# Apply peak pricing
+# Apply peak rate: 18:00–21:00 = 2x BasePricePerKwh
 df_finalrate = df_final1.withColumn(
     "FinalRate",
     when(
-        (df_final1.Hour &gt;= 18) & (df_final1.Hour &lt;= 21),
+        (df_final1.Hour >= 18) & (df_final1.Hour <= 21),
         df_final1.BasePricePerKwh * 2
     ).otherwise(df_final1.BasePricePerKwh)
 )
 
-# Calculate bill amount
+# Bill amount = kWh consumed × final rate, rounded to 2 decimal places
 df_billamount = df_finalrate.withColumn(
     "Bill_Amount",
     round(df_finalrate.kwh * df_finalrate.FinalRate, 2)
 )</code></pre>
+        <div class="insight">
+          <span class="insight-label">Why</span>
+          <p>Conditions in <code>when()</code> must use <strong><code>&</code> / <code>|</code> (bitwise operators)</strong>, not Python's <code>and</code> / <code>or</code>. Python's logical operators don't work on Spark Column objects and will produce wrong results silently.</p>
+        </div>
+      </div>
+    </div>
 
-    <h2>Step 7 — Write Silver Table</h2>
-    <p>
-      Final output written as a managed Delta table in Unity Catalog.
-      Read-back confirms the write succeeded.
-    </p>
-
-<pre><code>df_billamount.write.mode("overwrite").saveAsTable(
+    <!-- STEP 7 -->
+    <div class="step-card">
+      <div class="step-header">
+        <span class="step-num">STEP 07</span>
+        <span class="step-title">Write Silver Table</span>
+      </div>
+      <div class="step-body">
+        <p>Final output written as a managed Delta table in Unity Catalog. Read-back immediately after confirms the write completed successfully.</p>
+<pre><code class="language-python"># Write to Unity Catalog as managed Delta table
+df_billamount.write.mode("overwrite").saveAsTable(
     "workspace.green_grid_case_study.Silver_SmartBill"
 )
 
+# Read-back validation
 df_silver_tbl = spark.read.table("workspace.green_grid_case_study.Silver_SmartBill")
 display(df_silver_tbl)</code></pre>
-
-    <hr class="divider" />
-
-    <h2>Key Learnings</h2>
-    <div class="learnings-grid">
-      <div class="learning-card">
-        <h4>Explicit Schema vs inferSchema</h4>
-        <p>
-          <code>inferSchema</code> scans the file twice. Explicit <code>StructType</code>
-          gives full type control in one pass — the production pattern for any file
-          where types matter (timestamps, decimals).
-        </p>
-      </div>
-      <div class="learning-card">
-        <h4>multiLine JSON</h4>
-        <p>
-          Spark expects newline-delimited JSON by default. Standard JSON arrays
-          (starting with <code>[</code>) require <code>multiLine=True</code> — without
-          it you get a corrupt record error.
-        </p>
-      </div>
-      <div class="learning-card">
-        <h4>Quarantine Before Transform</h4>
-        <p>
-          Isolate bad records first, then process clean data. Preserving quarantined
-          rows in a separate table means nothing is silently dropped — you can always
-          go back and investigate.
-        </p>
-      </div>
-      <div class="learning-card">
-        <h4>PII in Pipelines</h4>
-        <p>
-          Raw PII identifiers should never reach a silver layer. SHA-256 hashing
-          (<code>sha2()</code>) replaces the raw value while preserving join capability
-          back to source systems.
-        </p>
-      </div>
-      <div class="learning-card">
-        <h4>Chained Joins</h4>
-        <p>
-          Two left joins chained in one statement. Ambiguous column names from
-          multiple tables must be dropped explicitly using the DataFrame reference
-          — not just the column name string.
-        </p>
-      </div>
-      <div class="learning-card">
-        <h4>when().otherwise()</h4>
-        <p>
-          PySpark's equivalent of SQL <code>CASE WHEN</code>. Conditions must use
-          <code>&amp;</code> / <code>|</code> (bitwise), not Python's <code>and</code> /
-          <code>or</code> — which silently fail on Spark Column objects.
-        </p>
+        <div class="insight">
+          <span class="insight-label">Why</span>
+          <p><strong>Read-back after write</strong> is a quick sanity check that the table exists, is queryable, and returns data in the expected shape — before any downstream process depends on it.</p>
+        </div>
       </div>
     </div>
 
     <hr class="divider" />
 
+    <!-- KEY LEARNINGS -->
+    <h2>Key Learnings</h2>
+    <div class="learnings-grid">
+      <div class="learning-card">
+        <h4>Explicit Schema vs inferSchema</h4>
+        <p>inferSchema scans the file twice and still misses timestamps. Explicit StructType = one pass, full type control — the production pattern.</p>
+      </div>
+      <div class="learning-card">
+        <h4>multiLine JSON</h4>
+        <p>Spark expects newline-delimited JSON by default. Standard arrays (<code>[...]</code>) require <code>multiLine=True</code> — without it, corrupt record error.</p>
+      </div>
+      <div class="learning-card">
+        <h4>Quarantine Before Transform</h4>
+        <p>Isolate bad records into a separate table first. Nothing gets silently dropped — always preserved for investigation.</p>
+      </div>
+      <div class="learning-card">
+        <h4>NULL Handling in Filters</h4>
+        <p>NULL &lt; 0 evaluates to NULL (not True) in Spark. Always add <code>isNotNull()</code> explicitly alongside range filters.</p>
+      </div>
+      <div class="learning-card">
+        <h4>PII in Pipelines</h4>
+        <p>Raw PII never reaches the silver layer. SHA-256 via <code>sha2()</code> replaces identifiers while keeping join-back capability.</p>
+      </div>
+      <div class="learning-card">
+        <h4>when().otherwise()</h4>
+        <p>PySpark's CASE WHEN equivalent. Must use <code>&</code> / <code>|</code> (bitwise), not Python's <code>and</code> / <code>or</code> — those silently fail on Column objects.</p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- OUTPUTS -->
     <h2>Tables Produced</h2>
-    <ul>
-      <li><strong>Quarantine_Readings</strong> — Invalid meter readings (kwh &lt; 0 or ≥ 100)</li>
-      <li><strong>clean_readings</strong> — Valid meter readings only</li>
-      <li><strong>Silver_SmartBill</strong> — Final enriched table with hashed PII, plan details, and calculated bill amounts</li>
-    </ul>
+    <div class="output-cards">
+      <div class="output-card output-quarantine">
+        <div class="table-name">Quarantine_Readings</div>
+        <p>Invalid meter readings — kwh &lt; 0 or ≥ 100. Preserved for investigation.</p>
+      </div>
+      <div class="output-card output-clean">
+        <div class="table-name">clean_readings</div>
+        <p>Valid readings only — non-null, kwh between 0 and 100.</p>
+      </div>
+      <div class="output-card output-silver">
+        <div class="table-name">Silver_SmartBill</div>
+        <p>Final enriched table — hashed PII, plan details, peak pricing, bill amounts.</p>
+      </div>
+    </div>
 
   </div>
 
   <!-- FOOTER -->
   <footer>
     <p>Saidev Bhaskar &nbsp;·&nbsp;
-      <a href="https://www.linkedin.com/in/saidev-pbi-fabric" target="_blank">LinkedIn</a>
+      <a href="https://www.linkedin.com/in/saidevbhaskar" target="_blank">LinkedIn</a>
       &nbsp;·&nbsp;
       <a href="https://github.com/saidev-pbi-fabric" target="_blank">GitHub</a>
     </p>
   </footer>
 
+  <script>hljs.highlightAll();</script>
 </body>
 </html>
