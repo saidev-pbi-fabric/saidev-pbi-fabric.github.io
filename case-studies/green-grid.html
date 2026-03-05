@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Green Grid — Smart Billing Pipeline | Saidev Bhaskar</title>
+  <meta name="description" content="End-to-end PySpark pipeline on Databricks — data ingestion, quarantine, PII hashing, joins, and peak-hour billing logic." />
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <span class="nav-brand">Saidev Bhaskar</span>
+    <div class="nav-links">
+      <a href="../index.html#about">About</a>
+      <a href="../index.html#skills">Skills</a>
+      <a href="../index.html#projects">Projects</a>
+      <a href="https://www.linkedin.com/in/saidev-pbi-fabric" target="_blank">LinkedIn</a>
+    </div>
+  </nav>
+
+  <!-- CASE STUDY HERO -->
+  <div class="cs-hero">
+    <a href="../index.html" class="cs-back">← Back to Portfolio</a>
+    <div class="hero-tag">Case Study</div>
+    <h1>Green Grid — Smart Billing Pipeline</h1>
+    <p style="color: var(--muted); font-size: 1rem; margin-top: 0.8rem; max-width: 620px;">
+      End-to-end PySpark pipeline on Databricks — from raw file ingestion to a
+      silver-layer billing table with peak-hour pricing logic.
+    </p>
+    <div class="cs-meta">
+      <div class="cs-meta-item"><strong>Platform</strong> · Databricks (Serverless)</div>
+      <div class="cs-meta-item"><strong>Catalog</strong> · Unity Catalog</div>
+      <div class="cs-meta-item"><strong>Language</strong> · PySpark</div>
+      <div class="cs-meta-item"><strong>Status</strong> · Complete</div>
+      <div class="cs-meta-item"><strong>Date</strong> · March 2026</div>
+    </div>
+  </div>
+
+  <!-- CASE STUDY BODY -->
+  <div class="cs-body">
+
+    <h2>Overview</h2>
+    <p>
+      Green Grid is a fictional energy company with three raw data sources: customer
+      PII records, smart meter readings, and pricing plans. The goal was to build a
+      complete ingestion-to-silver pipeline that produces a per-reading bill amount
+      with peak-hour pricing applied.
+    </p>
+    <p>
+      This case study covers every step a data engineer would face on a real project:
+      schema enforcement, data quality quarantine, PII protection, multi-dataset joins,
+      and business logic transformations — all written in PySpark on Databricks.
+    </p>
+
+    <h2>Pipeline Architecture</h2>
+    <div class="pipeline-diagram">
+      <span class="step">Raw Files (Unity Catalog Volume)</span><br />
+      &nbsp;&nbsp;customer_pii.csv &nbsp;·&nbsp; meter_readings.json &nbsp;·&nbsp; pricing_plans.csv<br />
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Ingest</span><br />
+      <span class="step">DataFrames</span> — df_pii · df_readings · df_plans<br />
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Data Quality</span><br />
+      <span class="table">Quarantine_Readings</span> (bad records: kwh &lt; 0 or kwh ≥ 100)<br />
+      <span class="table">clean_readings</span> (valid records only)<br />
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Join</span><br />
+      <span class="step">df_joined</span> — clean readings + PII + pricing plans<br />
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  PII Hashing</span><br />
+      <span class="step">df_hashed</span> — CustomerEmail replaced with SHA-256 hash<br />
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Business Logic</span><br />
+      <span class="step">Hour extracted · Peak rate applied · Bill_Amount calculated</span><br />
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Write</span><br />
+      <span class="table">Silver_SmartBill</span> (Delta managed table)
+    </div>
+
+    <h2>Data Sources</h2>
+    <p>All three files were stored in a managed Unity Catalog volume:</p>
+    <ul>
+      <li><strong>customer_pii.csv</strong> — Customer records including email addresses (PII)</li>
+      <li><strong>meter_readings.json</strong> — Smart meter kWh readings with timestamps (multiLine JSON array)</li>
+      <li><strong>pricing_plans.csv</strong> — Plan names and base price per kWh</li>
+    </ul>
+
+    <h2>Step 1 — Ingest</h2>
+    <p>
+      CSV files used <code>inferSchema=True</code> for type detection.
+      The JSON meter readings required an explicit <code>StructType</code> schema
+      to enforce <code>TimestampType</code> and <code>DoubleType</code> — JSON partial
+      inference leaves timestamps as strings.
+    </p>
+
+    <h3>Explicit Schema — meter_readings.json</h3>
+<pre><code>schema_readings = StructType([
+    StructField("kwh",       DoubleType(),    True),
+    StructField("meter_id",  StringType(),    True),
+    StructField("status",    StringType(),    True),
+    StructField("timestamp", TimestampType(), True)
+])
+
+df_readings = spark.read.json(
+    "/Volumes/workspace/green_grid_case_study/raw_files/meter_readings.json",
+    multiLine=True,
+    schema=schema_readings
+)</code></pre>
+
+    <p>
+      <strong>Why explicit schema?</strong> Without it, <code>timestamp</code> comes
+      back as <code>StringType</code> — which breaks any time-based function downstream
+      (<code>hour()</code>, date filtering, window functions). Explicit schema is the
+      production pattern: one pass over the file, full type control, no surprises.
+    </p>
+
+    <h2>Step 2 — Data Quality Quarantine</h2>
+    <p>
+      Before any transformation, bad records were isolated into a quarantine table.
+      This is a standard medallion architecture pattern — never transform dirty data,
+      always preserve it for investigation.
+    </p>
+
+<pre><code># Quarantine: readings outside valid range
+df_quarantine = df_readings.filter(
+    (df_readings.kwh &lt; 0) | (df_readings.kwh &gt;= 100)
+)
+df_quarantine.write.mode("overwrite").saveAsTable(
+    "workspace.green_grid_case_study.Quarantine_Readings"
+)
+
+# Validate the write
+df_test = spark.read.table("workspace.green_grid_case_study.Quarantine_Readings")
+df_quarantine.count() == df_test.count()</code></pre>
+
+    <p>
+      The count assertion confirms no rows were dropped or duplicated during the write —
+      a lightweight but important validation step before moving downstream.
+    </p>
+
+    <h2>Step 3 — Clean Readings</h2>
+    <p>
+      The inverse of the quarantine filter — only readings with valid kWh values
+      pass through to the clean table.
+    </p>
+
+<pre><code>df_clean = df_readings.filter(
+    df_readings.kwh.isNotNull() &
+    (df_readings.kwh &gt;= 0) &
+    (df_readings.kwh &lt; 100)
+)
+df_clean.write.mode("overwrite").saveAsTable(
+    "workspace.green_grid_case_study.clean_readings"
+)</code></pre>
+
+    <h2>Step 4 — Join Three Datasets</h2>
+    <p>
+      Two left joins chained in a single statement — clean readings to PII on
+      <code>meter_id</code>, then PII to pricing plans on <code>PlanID</code>.
+      Ambiguous columns dropped explicitly to avoid duplicates downstream.
+    </p>
+
+<pre><code>df_joined = df_clean \
+    .join(df_pii,   df_clean.meter_id == df_pii.MeterID,    "left") \
+    .join(df_plans, df_pii.PlanID     == df_plans.PlanID,   "left") \
+    .drop(df_clean.meter_id) \
+    .drop(df_pii.PlanID)</code></pre>
+
+    <h2>Step 5 — Hash PII</h2>
+    <p>
+      Customer email addresses are PII — they cannot appear in a silver table
+      that downstream consumers may access. SHA-256 hashing preserves the ability
+      to join back to the source system while removing the raw identifier.
+    </p>
+
+<pre><code>df_hashed = df_joined \
+    .withColumn("CustomerHashed", sha2(df_joined.CustomerEmail, 256)) \
+    .drop(df_joined.CustomerEmail)</code></pre>
+
+    <h2>Step 6 — Peak Pricing & Bill Calculation</h2>
+    <p>
+      Business rule: readings between 18:00 and 21:00 (peak hours) are charged
+      at 2× the base rate. The <code>hour()</code> function extracts the hour
+      from the timestamp column, and <code>when().otherwise()</code> applies
+      the conditional rate — equivalent to SQL <code>CASE WHEN</code>.
+    </p>
+
+<pre><code># Extract hour from timestamp
+df_final1 = df_hashed.withColumn("Hour", hour(df_hashed.timestamp))
+
+# Apply peak pricing
+df_finalrate = df_final1.withColumn(
+    "FinalRate",
+    when(
+        (df_final1.Hour &gt;= 18) & (df_final1.Hour &lt;= 21),
+        df_final1.BasePricePerKwh * 2
+    ).otherwise(df_final1.BasePricePerKwh)
+)
+
+# Calculate bill amount
+df_billamount = df_finalrate.withColumn(
+    "Bill_Amount",
+    round(df_finalrate.kwh * df_finalrate.FinalRate, 2)
+)</code></pre>
+
+    <h2>Step 7 — Write Silver Table</h2>
+    <p>
+      Final output written as a managed Delta table in Unity Catalog.
+      Read-back confirms the write succeeded.
+    </p>
+
+<pre><code>df_billamount.write.mode("overwrite").saveAsTable(
+    "workspace.green_grid_case_study.Silver_SmartBill"
+)
+
+df_silver_tbl = spark.read.table("workspace.green_grid_case_study.Silver_SmartBill")
+display(df_silver_tbl)</code></pre>
+
+    <hr class="divider" />
+
+    <h2>Key Learnings</h2>
+    <div class="learnings-grid">
+      <div class="learning-card">
+        <h4>Explicit Schema vs inferSchema</h4>
+        <p>
+          <code>inferSchema</code> scans the file twice. Explicit <code>StructType</code>
+          gives full type control in one pass — the production pattern for any file
+          where types matter (timestamps, decimals).
+        </p>
+      </div>
+      <div class="learning-card">
+        <h4>multiLine JSON</h4>
+        <p>
+          Spark expects newline-delimited JSON by default. Standard JSON arrays
+          (starting with <code>[</code>) require <code>multiLine=True</code> — without
+          it you get a corrupt record error.
+        </p>
+      </div>
+      <div class="learning-card">
+        <h4>Quarantine Before Transform</h4>
+        <p>
+          Isolate bad records first, then process clean data. Preserving quarantined
+          rows in a separate table means nothing is silently dropped — you can always
+          go back and investigate.
+        </p>
+      </div>
+      <div class="learning-card">
+        <h4>PII in Pipelines</h4>
+        <p>
+          Raw PII identifiers should never reach a silver layer. SHA-256 hashing
+          (<code>sha2()</code>) replaces the raw value while preserving join capability
+          back to source systems.
+        </p>
+      </div>
+      <div class="learning-card">
+        <h4>Chained Joins</h4>
+        <p>
+          Two left joins chained in one statement. Ambiguous column names from
+          multiple tables must be dropped explicitly using the DataFrame reference
+          — not just the column name string.
+        </p>
+      </div>
+      <div class="learning-card">
+        <h4>when().otherwise()</h4>
+        <p>
+          PySpark's equivalent of SQL <code>CASE WHEN</code>. Conditions must use
+          <code>&amp;</code> / <code>|</code> (bitwise), not Python's <code>and</code> /
+          <code>or</code> — which silently fail on Spark Column objects.
+        </p>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <h2>Tables Produced</h2>
+    <ul>
+      <li><strong>Quarantine_Readings</strong> — Invalid meter readings (kwh &lt; 0 or ≥ 100)</li>
+      <li><strong>clean_readings</strong> — Valid meter readings only</li>
+      <li><strong>Silver_SmartBill</strong> — Final enriched table with hashed PII, plan details, and calculated bill amounts</li>
+    </ul>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>Saidev Bhaskar &nbsp;·&nbsp;
+      <a href="https://www.linkedin.com/in/saidev-pbi-fabric" target="_blank">LinkedIn</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/saidev-pbi-fabric" target="_blank">GitHub</a>
+    </p>
+  </footer>
+
+</body>
+</html>
