@@ -367,28 +367,59 @@ footer {
 .cs-body li { margin-bottom: 0.4rem; }
 .cs-body strong { color: var(--text); }
 
+/* macOS window chrome above every code block */
 pre {
-  background: var(--code-bg);
-  border: 1px solid var(--border);
+  position: relative;
+  background: #0d1117;
+  border: 1px solid #2a2d3a;
   border-radius: var(--radius);
-  padding: 1.4rem;
+  padding: 1.4rem 1.4rem 1.4rem 1.4rem;
+  padding-top: 2.8rem;
   overflow-x: auto;
   margin: 1rem 0 1.5rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+pre::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.2rem;
+  background: #161b22;
+  border-bottom: 1px solid #2a2d3a;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+pre::after {
+  content: '● ● ●';
+  position: absolute;
+  top: 0.55rem;
+  left: 1rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.3em;
+  /* red yellow green */
+  background: linear-gradient(90deg, #ff5f57 0%, #ff5f57 30%, #ffbd2e 30%, #ffbd2e 60%, #28c840 60%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 code {
   font-family: var(--mono);
   font-size: 0.85rem;
-  color: #c9d1e8;
-  line-height: 1.6;
+  color: #79c0ff;
+  line-height: 1.8;
 }
 
 p code, li code {
-  background: var(--code-bg);
-  border: 1px solid var(--border);
+  background: #0d1117;
+  border: 1px solid #2a2d3a;
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.82rem;
+  color: #79c0ff;
 }
 
 .pipeline-diagram {
