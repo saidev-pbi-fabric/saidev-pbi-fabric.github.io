@@ -35,7 +35,7 @@
     <div class="hero-tag">Case Study · PySpark · Databricks · GDPR</div>
     <h1>SantéFlux — GDPR Privacy Pipeline</h1>
     <p style="color: var(--muted); font-size: 1rem; margin-top: 0.8rem; max-width: 620px;">
-      End-to-end privacy pipeline for a health-tech company — PII masking, salted hashing,
+      End-to-end privacy pipeline for a health-tech company: PII masking, salted hashing,
       frozen sensor removal, broadcast join, ghost user isolation, and an interactive
       City Stress Matrix for the board.
     </p>
@@ -58,14 +58,13 @@
       SantéFlux is a French health-tech company whose smart watch platform collects millions
       of bio-pings daily. When the Chief Privacy Officer found full names and raw user IDs
       in shared folders, analytics access was blocked entirely. The lead data engineer had
-      48 hours to build a privacy-compliant pipeline, remove corrupted sensor data, and
-      deliver an interactive heart rate report to the board — or the Stress Spikes project
-      would be shut down.
+      to build a GDPR-compliant pipeline, remove corrupted sensor data, and deliver an
+      interactive heart rate report to the board.
     </p>
     <p>
-      The pipeline had to satisfy two competing demands at once: strict GDPR compliance
-      (mask names, salt and hash IDs, never expose raw PII) and a working analytical output
-      (City Stress Matrix showing heart rate ranges by location and subscription tier).
+      Two requirements had to be met at the same time: strict GDPR compliance (mask names,
+      salt and hash IDs, no raw PII in any output) and a working analytical result (City
+      Stress Matrix showing heart rate ranges by city and subscription tier).
     </p>
 
     <!-- PIPELINE DIAGRAM -->
@@ -76,38 +75,38 @@
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Ingest</span><br />
       <span class="step">df_vitals · df_subs</span><br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  PII Masking</span><br />
-      <span class="step">df_masked</span> — Full_Name partially masked with regexp_replace<br />
+      <span class="step">df_masked</span>: Full_Name partially masked with regexp_replace<br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Salted Hashing</span><br />
-      <span class="step">df_hashed</span> — User_ID replaced with SHA-256(User_ID + salt)<br />
+      <span class="step">df_hashed</span>: User_ID replaced with SHA-256(User_ID + salt)<br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Window Functions</span><br />
-      <span class="step">df_windowed</span> — 10-minute time windows per user<br />
+      <span class="step">df_windowed</span>: 10-minute time windows per user<br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Frozen Sensor Detection</span><br />
       <span class="table">df_frozen</span> (min Heart_Rate == max in window = stuck sensor)<br />
       <span class="table">vitals_clean_df</span> (left_anti join removes frozen rows)<br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Broadcast Join</span><br />
-      <span class="step">df_joined</span> — clean vitals + subscription type (broadcast on small subs table)<br />
+      <span class="step">df_joined</span>: clean vitals + subscription type (broadcast on small subs table)<br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Ghost User Isolation</span><br />
-      <span class="table">df_ghost</span> (no subscription match — isolated before board report)<br />
+      <span class="table">df_ghost</span> (no subscription match, isolated before board report)<br />
       <span class="table">df_clean</span> (matched users only)<br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  City Stress Matrix</span><br />
-      <span class="table">df_final</span> — groupBy ville · pivot Subscription_Type · max/min Heart_Rate<br />
+      <span class="table">df_final</span>: groupBy ville · pivot Subscription_Type · max/min Heart_Rate<br />
       &nbsp;&nbsp;&nbsp;&nbsp;<span class="arrow">↓  Interactive Widget</span><br />
-      <span class="step">Board report — city toggle via dbutils.widgets (no pipeline re-run)</span>
+      <span class="step">Board report: city toggle via dbutils.widgets (no pipeline re-run)</span>
     </div>
 
     <!-- DATA SOURCES -->
     <h2>Data Sources</h2>
     <p>Both files stored in a managed Unity Catalog volume at <code>/Volumes/workspace/santeflux_case_study/raw_files/</code></p>
-    <div class="source-cards">
+    <div class="source-cards" style="grid-template-columns: 1fr 1fr">
       <div class="source-card">
         <div class="badge badge-csv">CSV</div>
         <div class="file-name">vitals.csv</div>
-        <p>750,000 bio-ping records from smart watches. Contains User_ID, Full_Name, Timestamp, ville, Heart_Rate, and Status. Raw PII — requires masking and hashing before any shared use.</p>
+        <p>750,000 bio-ping records from smart watches. Contains User_ID, Full_Name, Timestamp, ville, Heart_Rate, and Status. Raw PII that requires masking and hashing before any shared use.</p>
       </div>
       <div class="source-card">
         <div class="badge badge-csv">CSV</div>
         <div class="file-name">subs.csv</div>
-        <p>10,000-row subscription lookup — User_ID and Subscription_Type (Free or Premium). Small table, well suited for broadcast join to avoid shuffling the large vitals dataset.</p>
+        <p>10,000-row subscription lookup with User_ID and Subscription_Type (Free or Premium). Small enough to broadcast, which avoids shuffling the large vitals dataset on the join.</p>
       </div>
     </div>
 
@@ -118,22 +117,36 @@
         <span class="step-title">Ingest Raw Files</span>
       </div>
       <div class="step-body">
-        <p>Both CSVs ingested with <code>inferSchema=True</code>. Timestamp columns are correctly detected as TimestampType from the ISO format in the source — no explicit schema needed here.</p>
+        <p>Both CSVs ingested with explicit <code>StructType</code> schemas. Defining the schema upfront means Spark reads the file in a single pass with guaranteed types. <code>inferSchema=True</code> requires an extra full scan of the file just to detect types, which is wasted work when the structure is already known.</p>
 <pre><code class="language-python">from pyspark.sql.functions import *
-from pyspark.sql.types import *
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, TimestampType
+
+vitals_schema = StructType([
+    StructField("User_ID",      IntegerType(),   False),
+    StructField("Full_Name",    StringType(),    True),
+    StructField("Timestamp",    TimestampType(), True),
+    StructField("ville",        StringType(),    True),
+    StructField("Heart_Rate",   IntegerType(),   True),
+    StructField("Status",       StringType(),    True)
+])
+
+subs_schema = StructType([
+    StructField("User_ID",           IntegerType(), False),
+    StructField("Subscription_Type", StringType(),  True)
+])
 
 df_vitals = spark.read.csv(
     "/Volumes/workspace/santeflux_case_study/raw_files/vitals.csv",
-    header=True, inferSchema=True
+    header=True, schema=vitals_schema
 )
 
 df_subs = spark.read.csv(
     "/Volumes/workspace/santeflux_case_study/raw_files/subs.csv",
-    header=True, inferSchema=True
+    header=True, schema=subs_schema
 )</code></pre>
         <div class="insight">
-          <span class="insight-label">Why</span>
-          <p>Subscription data explored first with <code>groupBy("Subscription_Type").count()</code> to confirm the two tiers (Free / Premium) and check for unexpected values before building the join.</p>
+          <span class="insight-label">Why explicit schema</span>
+          <p>With <code>inferSchema=True</code>, Spark reads the entire file twice: once to detect types, once to load data. An explicit schema cuts that to one pass. It also catches type mismatches early. If a Heart_Rate column gets a string value in the source, the job fails at read time rather than silently producing bad aggregations later.</p>
         </div>
       </div>
     </div>
@@ -153,7 +166,7 @@ df_subs = spark.read.csv(
 # Pierre Dubois → Pierre D****</code></pre>
         <div class="insight">
           <span class="insight-label">Why</span>
-          <p>Masking happens at the first transformation step — before any grouping, joining, or writing. Raw names never travel through the pipeline. The regex keeps first name + first initial intact so records remain traceable for debugging without exposing the full surname.</p>
+          <p>Masking happens at the first transformation step, before any grouping, joining, or writing. Raw names never travel through the pipeline. The regex keeps first name and first initial intact so records remain traceable for debugging without exposing the full surname.</p>
         </div>
       </div>
     </div>
@@ -165,7 +178,7 @@ df_subs = spark.read.csv(
         <span class="step-title">Salted Hashing — User IDs</span>
       </div>
       <div class="step-body">
-        <p>Raw User_IDs cannot appear in any output. A fixed company salt is prepended before hashing — this stops rainbow table attacks where an attacker pre-computes hashes for all known IDs.</p>
+        <p>Raw User_IDs cannot appear in any output. A fixed company salt is prepended before hashing. This stops rainbow table attacks where an attacker pre-computes hashes for all known IDs.</p>
 <pre><code class="language-python">salt = "SanteFlux_Salt_2025"
 
 # Hash vitals User_ID → store as new column hashed_name
@@ -181,7 +194,7 @@ df_subs_upd = df_subs.withColumn(
 ).select("hashed_name", "Subscription_Type")</code></pre>
         <div class="insight">
           <span class="insight-label">Why</span>
-          <p><strong>Both tables must use the same salt and function</strong> — otherwise the hashes won't match and the join produces nulls. The salt must be shared with any team that needs to join back to this data. This is the trade-off: salting adds security but requires coordination across teams.</p>
+          <p><strong>Both tables must use the same salt and function.</strong> If the salt differs, the hashes won't match and the join produces nulls. The salt must be shared with any team that needs to join back to this data. That is the trade-off: salting adds security but requires coordination across teams.</p>
         </div>
       </div>
     </div>
@@ -193,7 +206,7 @@ df_subs_upd = df_subs.withColumn(
         <span class="step-title">Frozen Sensor Detection</span>
       </div>
       <div class="step-body">
-        <p>Some smart watch sensors were transmitting the same heart rate value for extended periods — a hardware fault, not real data. Including these rows would pull city averages toward a single stuck value. The detection approach: group by user and 10-minute time window, then flag windows where min Heart_Rate equals max Heart_Rate.</p>
+        <p>Some smart watch sensors were transmitting the same heart rate value for extended periods, a hardware fault rather than real data. Including these rows would pull city averages toward a single stuck value. The approach: group by user and 10-minute time window, then flag windows where min Heart_Rate equals max Heart_Rate.</p>
 <pre><code class="language-python"># Create 10-minute time windows
 df_windowed = df_hashed.withColumn(
     "Time_Window", window(col("Timestamp"), "10 minutes")
@@ -214,7 +227,7 @@ vitals_clean_df = df_windowed.join(
 )</code></pre>
         <div class="insight">
           <span class="insight-label">Why left_anti</span>
-          <p><strong>left_anti returns only rows from the left table that have no match on the right.</strong> It's the cleanest way to say "give me everything except what's in this exclusion list." A filter-based approach would require subqueries or a separate flag column — left_anti does it in one join.</p>
+          <p><strong>left_anti returns only rows from the left table that have no match on the right.</strong> It is the cleanest way to apply an exclusion list. A filter-based approach would require subqueries or a flag column followed by a filter. left_anti does it in one join.</p>
         </div>
       </div>
     </div>
@@ -226,7 +239,7 @@ vitals_clean_df = df_windowed.join(
         <span class="step-title">Broadcast Join — Vitals + Subscriptions</span>
       </div>
       <div class="step-body">
-        <p>The cleaned vitals table (750k rows) needs to be joined to the subscription lookup (10k rows). A standard join would shuffle both tables across the network. Broadcasting the small subscriptions table instead sends one copy to every executor — the large table never moves.</p>
+        <p>The cleaned vitals table (750k rows) needs to be joined to the subscription lookup (10k rows). A standard join shuffles both tables across the network. Broadcasting the small subscriptions table sends one copy to every executor. The large table never moves.</p>
 <pre><code class="language-python">df_joined = vitals_clean_df.join(
     broadcast(df_subs_upd),
     vitals_clean_df.hashed_name == df_subs_upd.hashed_name,
@@ -240,7 +253,7 @@ vitals_clean_df = df_windowed.join(
 )</code></pre>
         <div class="insight">
           <span class="insight-label">Why broadcast</span>
-          <p>Confirmed in the physical plan — <code>PhotonBroadcastHashJoin BuildRight</code> with <code>EXECUTOR_BROADCAST</code> on the subs side. No Exchange node on the large vitals table. The subscription lookup at ~125 KB is well within safe broadcast range (default threshold: 10 MB).</p>
+          <p>Confirmed in the physical plan: <code>PhotonBroadcastHashJoin BuildRight</code> with <code>EXECUTOR_BROADCAST</code> on the subs side. No Exchange node on the large vitals table. The subscription lookup at ~125 KB is well within safe broadcast range (default threshold: 10 MB).</p>
         </div>
       </div>
     </div>
@@ -252,15 +265,15 @@ vitals_clean_df = df_windowed.join(
         <span class="step-title">Ghost User Isolation</span>
       </div>
       <div class="step-body">
-        <p>Some bio-pings in the vitals file had no matching record in the subscriptions file — users who exist in the sensor data but never registered a subscription. These rows return null for Subscription_Type after the left join. Including them in the pivot would create a null column in the board report.</p>
-<pre><code class="language-python"># Isolate ghost users — no subscription match
+        <p>Some bio-pings in the vitals file had no matching record in the subscriptions file. These are users who exist in the sensor data but never registered a subscription. They return null for Subscription_Type after the left join. Including them in the pivot creates a null column in the board report.</p>
+<pre><code class="language-python"># Isolate ghost users (no subscription match)
 df_ghost = df_joined.filter(col("Subscription_Type").isNull())
 
-# Clean data — matched users only, safe for board report
+# Clean data: matched users only, safe for board report
 df_clean = df_joined.filter(col("Subscription_Type").isNotNull())</code></pre>
         <div class="insight">
           <span class="insight-label">Why</span>
-          <p>Ghost users are isolated, not deleted. <code>df_ghost</code> is available for investigation — the data team can trace these IDs back to the source system to understand why they have no subscription record. The board report is built exclusively from <code>df_clean</code>.</p>
+          <p>Ghost users are isolated, not deleted. <code>df_ghost</code> is kept for investigation. The data team can trace these IDs back to the source system to understand why they have no subscription record. The board report is built exclusively from <code>df_clean</code>.</p>
         </div>
       </div>
     </div>
@@ -280,7 +293,7 @@ df_clean = df_joined.filter(col("Subscription_Type").isNotNull())</code></pre>
 display(df_final)</code></pre>
         <div class="insight">
           <span class="insight-label">Why pivot creates shuffle</span>
-          <p>Pivot is a wide transformation — it needs all rows for the same city and subscription type to land on the same executor before it can compute the aggregation. This triggers a shuffle. Removing ghost users and frozen rows beforehand reduces the data volume entering that shuffle, which is why the order of steps matters.</p>
+          <p>Pivot is a wide transformation. It needs all rows for the same city and subscription type to land on the same executor before it can compute the aggregation. This triggers a shuffle. Removing ghost users and frozen rows beforehand reduces the data volume entering that shuffle. The order of steps matters.</p>
         </div>
       </div>
     </div>
@@ -292,7 +305,7 @@ display(df_final)</code></pre>
         <span class="step-title">Interactive Board Widget</span>
       </div>
       <div class="step-body">
-        <p>The board needs to filter the report by city without re-running the full pipeline. A Databricks dropdown widget captures the selected city. Only the display cell re-runs when the selection changes — the full pipeline from ingestion to pivot has already executed and <code>df_final</code> is in memory.</p>
+        <p>The board needs to filter the report by city without re-running the full pipeline. A Databricks dropdown widget captures the selected city. Only the display cell re-runs when the selection changes. The full pipeline from ingestion to pivot has already executed and <code>df_final</code> is in memory.</p>
 <pre><code class="language-python"># Create dropdown widget (runs once)
 dbutils.widgets.dropdown("ville", "Paris", ["Paris", "Lyon", "Marseille"])
 
@@ -303,7 +316,7 @@ display(
 )</code></pre>
         <div class="insight">
           <span class="insight-label">Why</span>
-          <p>The widget is the notebook equivalent of a slicer in Power BI — the underlying data is already computed, and the control just filters the display. Changing the dropdown triggers only the cell that reads the widget value, not the entire notebook.</p>
+          <p>The widget is the notebook equivalent of a Power BI slicer. The underlying data is already computed and <code>df_final</code> is in memory. Changing the dropdown triggers only the display cell, not the entire notebook. The output table shows one row per city with columns for Free_max_Heart_Rate, Free_min_Heart_Rate, Premium_max_Heart_Rate, Premium_min_Heart_Rate.</p>
         </div>
       </div>
     </div>
@@ -315,7 +328,7 @@ display(
     <div class="learnings-grid">
       <div class="learning-card">
         <h4>Salt Before You Hash</h4>
-        <p>SHA-256 without a salt is vulnerable to rainbow table attacks — an attacker can pre-compute hashes for all known IDs. Concatenating a company secret before hashing stops this. The trade-off: every team joining on this data must use the same salt.</p>
+        <p>SHA-256 without a salt is vulnerable to rainbow table attacks. An attacker can pre-compute hashes for all known IDs and reverse-match them. Concatenating a company secret before hashing stops this. The trade-off: every team joining on this data must use the same salt.</p>
       </div>
       <div class="learning-card">
         <h4>left_anti for Exclusion Lists</h4>
@@ -323,19 +336,19 @@ display(
       </div>
       <div class="learning-card">
         <h4>Broadcast Join — Know the Limit</h4>
-        <p>Sending the small table to every executor eliminates the shuffle entirely. Safe up to ~200 MB. The default auto-broadcast threshold is 10 MB — tune via <code>spark.sql.autoBroadcastJoinThreshold</code>. Confirmed working when the physical plan shows <code>BroadcastHashJoin</code> with no Exchange on the large table.</p>
+        <p>Sending the small table to every executor eliminates the shuffle entirely. Safe up to ~200 MB. The default auto-broadcast threshold is 10 MB, tunable via <code>spark.sql.autoBroadcastJoinThreshold</code>. Confirmed working when the physical plan shows <code>BroadcastHashJoin</code> with no Exchange on the large table.</p>
       </div>
       <div class="learning-card">
         <h4>Ghost Users from Left Joins</h4>
-        <p>A left join preserves all rows from the driving table regardless of match. Any row with a null in the joined columns is a ghost — exists in the source but not in the lookup. Always check for and isolate these before aggregating.</p>
+        <p>A left join preserves all rows from the driving table regardless of match. Any row with a null in the joined columns is a ghost: it exists in the source but not in the lookup. Always isolate these before aggregating.</p>
       </div>
       <div class="learning-card">
         <h4>Pivot Creates Shuffle</h4>
-        <p>Pivot is a wide transformation. It needs all rows for the same group key to land on the same executor before aggregating. The order of steps matters — remove bad data before the pivot, not after, to minimise the data crossing the network.</p>
+        <p>Pivot is a wide transformation. It needs all rows for the same group key to land on the same executor before aggregating. Remove bad data before the pivot, not after, to reduce the data crossing the network in the shuffle.</p>
       </div>
       <div class="learning-card">
         <h4>Read Physical Plans Bottom to Top</h4>
-        <p>Physical plans execute from the bottom node up. FileScan at the bottom, result stage at the top. Exchange nodes indicate shuffles. PushedFilters on FileScan confirms predicate pushdown — the filter ran at read time, not after loading all rows into memory.</p>
+        <p>Physical plans execute from the bottom node up. FileScan at the bottom, result stage at the top. Exchange nodes indicate shuffles. PushedFilters on FileScan confirms predicate pushdown: the filter ran at read time, not after loading all rows into memory.</p>
       </div>
     </div>
 
@@ -346,7 +359,7 @@ display(
     <div class="output-cards">
       <div class="output-card output-quarantine">
         <div class="table-name">df_ghost</div>
-        <p>Bio-pings with no subscription match — isolated for investigation, excluded from board report.</p>
+        <p>Bio-pings with no subscription match. Isolated for investigation, excluded from the board report.</p>
       </div>
       <div class="output-card output-clean">
         <div class="table-name">vitals_clean_df</div>
@@ -354,7 +367,7 @@ display(
       </div>
       <div class="output-card output-silver">
         <div class="table-name">df_final (City Stress Matrix)</div>
-        <p>Heart rate ranges by city and subscription tier — pivot output with interactive widget for board filtering.</p>
+        <p>Heart rate ranges by city and subscription tier. Pivot output delivered via interactive widget for board filtering.</p>
       </div>
     </div>
 
