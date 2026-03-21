@@ -314,6 +314,16 @@ selected_ville = dbutils.widgets.get("ville")
 display(
     df_final.filter(col("ville") == selected_ville)
 )</code></pre>
+        <div style="margin: 1.5rem 0;">
+          <img
+            src="../images/WidgetFunctionality.jpeg"
+            alt="Databricks widget dropdown for ville set to Paris, with the filtered City Stress Matrix result table below showing heart rate ranges"
+            style="width: 100%; border-radius: 8px; border: 1px solid var(--border);"
+          />
+          <p style="font-size: 0.78rem; color: var(--muted); margin-top: 0.5rem;">
+            Widget set to Paris — only the display cell re-ran. The full pipeline output in <code>df_final</code> was already in memory.
+          </p>
+        </div>
         <div class="insight">
           <span class="insight-label">Why</span>
           <p>The widget is the notebook equivalent of a Power BI slicer. The underlying data is already computed and <code>df_final</code> is in memory. Changing the dropdown triggers only the display cell, not the entire notebook. The output table shows one row per city with columns for Free_max_Heart_Rate, Free_min_Heart_Rate, Premium_max_Heart_Rate, Premium_min_Heart_Rate.</p>
