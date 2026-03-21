@@ -62,9 +62,8 @@
       interactive heart rate report to the board.
     </p>
     <p>
-      Two requirements had to be met at the same time: strict GDPR compliance (mask names,
-      salt and hash IDs, no raw PII in any output) and a working analytical result (City
-      Stress Matrix showing heart rate ranges by city and subscription tier).
+      The catch: both things had to happen together. Fix the privacy problem and deliver the
+      board report. Neither could wait.
     </p>
 
     <!-- PIPELINE DIAGRAM -->
@@ -158,7 +157,7 @@ df_subs = spark.read.csv(
         <span class="step-title">PII Masking — Names</span>
       </div>
       <div class="step-body">
-        <p>Full names are partially masked at the point of ingestion. The first name is kept for readability; the last name is reduced to its first letter followed by asterisks. This satisfies the CPO's requirement while keeping the data usable for internal investigation.</p>
+        <p>Full names are partially masked at ingestion. First name stays, last name becomes first initial plus asterisks. Still traceable for debugging, but no full surname reaches any output.</p>
 <pre><code class="language-python">df_masked = df_vitals.withColumn(
     "Full_Name",
     regexp_replace("Full_Name", r"^(\w+)\s(\w)(.*)", "$1 $2****")
@@ -194,7 +193,7 @@ df_subs_upd = df_subs.withColumn(
 ).select("hashed_name", "Subscription_Type")</code></pre>
         <div class="insight">
           <span class="insight-label">Why</span>
-          <p><strong>Both tables must use the same salt and function.</strong> If the salt differs, the hashes won't match and the join produces nulls. The salt must be shared with any team that needs to join back to this data. That is the trade-off: salting adds security but requires coordination across teams.</p>
+          <p>Both tables must use the same salt and function. Different salts produce different hashes — the join returns nulls with no error. Any team joining back to this data needs the same secret. Salting stops rainbow table attacks, but the salt becomes a coordination dependency across teams.</p>
         </div>
       </div>
     </div>
@@ -206,7 +205,7 @@ df_subs_upd = df_subs.withColumn(
         <span class="step-title">Frozen Sensor Detection</span>
       </div>
       <div class="step-body">
-        <p>Some smart watch sensors were transmitting the same heart rate value for extended periods, a hardware fault rather than real data. Including these rows would pull city averages toward a single stuck value. The approach: group by user and 10-minute time window, then flag windows where min Heart_Rate equals max Heart_Rate.</p>
+        <p>Some sensors were transmitting the same heart rate for hours — a hardware fault, not real data. A stuck reading of 72 bpm across an entire window would drag city averages toward that one value. The fix: group by user and 10-minute time window, then flag any window where min equals max Heart_Rate.</p>
 <pre><code class="language-python"># Create 10-minute time windows
 df_windowed = df_hashed.withColumn(
     "Time_Window", window(col("Timestamp"), "10 minutes")
@@ -227,7 +226,7 @@ vitals_clean_df = df_windowed.join(
 )</code></pre>
         <div class="insight">
           <span class="insight-label">Why left_anti</span>
-          <p><strong>left_anti returns only rows from the left table that have no match on the right.</strong> It is the cleanest way to apply an exclusion list. A filter-based approach would require subqueries or a flag column followed by a filter. left_anti does it in one join.</p>
+          <p>left_anti returns only rows from the left table with no match on the right. A filter-based approach needs a subquery or a flag column followed by a filter. left_anti does the same thing in one join.</p>
         </div>
       </div>
     </div>
@@ -305,7 +304,7 @@ display(df_final)</code></pre>
         <span class="step-title">Interactive Board Widget</span>
       </div>
       <div class="step-body">
-        <p>The board needs to filter the report by city without re-running the full pipeline. A Databricks dropdown widget captures the selected city. Only the display cell re-runs when the selection changes. The full pipeline from ingestion to pivot has already executed and <code>df_final</code> is in memory.</p>
+        <p>The board wants to filter by city without waiting for the pipeline to re-run. A Databricks dropdown widget handles this: when the selection changes, only the display cell re-executes. Everything from ingestion to pivot has already run and <code>df_final</code> is sitting in memory.</p>
 <pre><code class="language-python"># Create dropdown widget (runs once)
 dbutils.widgets.dropdown("ville", "Paris", ["Paris", "Lyon", "Marseille"])
 
@@ -326,7 +325,7 @@ display(
         </div>
         <div class="insight">
           <span class="insight-label">Why</span>
-          <p>The widget is the notebook equivalent of a Power BI slicer. The underlying data is already computed and <code>df_final</code> is in memory. Changing the dropdown triggers only the display cell, not the entire notebook. The output table shows one row per city with columns for Free_max_Heart_Rate, Free_min_Heart_Rate, Premium_max_Heart_Rate, Premium_min_Heart_Rate.</p>
+          <p>Same concept as a Power BI slicer — the data is already computed, the filter just changes what you see. Changing the dropdown triggers only the display cell, not the full notebook. One row per city, four columns: Free and Premium max and min Heart_Rate.</p>
         </div>
       </div>
     </div>
@@ -338,7 +337,7 @@ display(
     <div class="learnings-grid">
       <div class="learning-card">
         <h4>Salt Before You Hash</h4>
-        <p>SHA-256 without a salt is vulnerable to rainbow table attacks. An attacker can pre-compute hashes for all known IDs and reverse-match them. Concatenating a company secret before hashing stops this. The trade-off: every team joining on this data must use the same salt.</p>
+        <p>SHA-256 without a salt is vulnerable to rainbow table attacks. An attacker pre-computes hashes for all known IDs and reverse-matches them. Prepending a company secret stops this — but now every team joining on this data must use the same salt.</p>
       </div>
       <div class="learning-card">
         <h4>left_anti for Exclusion Lists</h4>
